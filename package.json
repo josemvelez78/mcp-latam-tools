@@ -1,0 +1,16 @@
+{
+  "name": "mcp-latam-tools",
+  "version": "1.0.0",
+  "description": "MCP Server with Latin American data tools - CPF, CNPJ, PIX, RUT, RFC and more",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
