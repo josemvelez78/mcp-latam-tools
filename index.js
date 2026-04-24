@@ -2,14 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import http from "http";
-
+ 
 const createServer = () => {
   const server = new McpServer({
     name: "mcp-europe-tools",
     version: "1.1.0",
     description: "Essential European data validation and formatting tools for AI agents working with Portuguese, Spanish and European business data. Covers NIF/NIE/CIF validation, IBAN verification, VAT rates, public holidays and number formatting for 18+ European countries."
   });
-
+ 
   // ── FERRAMENTA 1: Validar NIF Português ──
   server.registerTool(
     "validate_nif",
@@ -37,7 +37,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ valid, nif: clean }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 2: Validar IBAN ──
   server.registerTool(
     "validate_iban",
@@ -62,7 +62,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ valid, country, iban: clean }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 3: Taxas de IVA Europeias ──
   server.registerTool(
     "get_vat_rate",
@@ -100,7 +100,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify(data) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 4: Feriados Portugueses ──
   server.registerTool(
     "get_portugal_holidays",
@@ -125,7 +125,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ year, country: "Portugal", total_holidays: holidays.length, holidays }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 5: Formatar Número Europeu ──
   server.registerTool(
     "format_number_european",
@@ -153,7 +153,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ original: number, formatted, locale, country_code }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 6: Validar NIF/NIE/CIF Espanhol ──
   server.registerTool(
     "validate_nif_es",
@@ -204,7 +204,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ valid: false, reason: "Format not recognized. Expected NIF (8 digits + letter), NIE (X/Y/Z + 7 digits + letter) or CIF (letter + 7 digits + control)" }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 7: Calcular Dias Úteis ──
   server.registerTool(
     "calculate_working_days",
@@ -239,7 +239,7 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ start_date, end_date, working_days: count }) }] };
     }
   );
-
+ 
   // ── FERRAMENTA 8: Feriados Espanhóis ──
   server.registerTool(
     "get_spain_holidays",
@@ -263,10 +263,10 @@ const createServer = () => {
       return { content: [{ type: "text", text: JSON.stringify({ year, country: "Spain", total_holidays: holidays.length, holidays }) }] };
     }
   );
-
+ 
   return server;
 };
-
+ 
 // ── Servidor HTTP ──
 const httpServer = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/") {
@@ -280,7 +280,7 @@ const httpServer = http.createServer(async (req, res) => {
     }));
     return;
   }
-
+ 
   if (req.url === "/mcp") {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -289,11 +289,11 @@ const httpServer = http.createServer(async (req, res) => {
     await transport.handleRequest(req, res);
     return;
   }
-
+ 
   res.writeHead(404);
   res.end("Not found");
 });
-
+ 
 const PORT = process.env.PORT || 8080;
 httpServer.listen(PORT, () => {
   console.log(`MCP Europe Tools server running on port ${PORT}`);
