@@ -6,8 +6,8 @@ import http from "http";
 const createServer = () => {
   const server = new McpServer({
     name: "mcp-latam-tools",
-    version: "1.1.0",
-    description: "Essential Latin American data validation and utility tools for AI agents working with Brazilian, Mexican and Chilean business data. Covers CPF, CNPJ, PIX key validation, RFC and RUT validation, and national public holidays for Brazil, Mexico and Chile."
+    version: "1.2.0",
+    description: "Essential Latin American data validation and utility tools for AI agents working with Brazilian, Mexican, Chilean and Argentine business data. Covers CPF, CNPJ, PIX key validation, RFC, RUT, CUIT/CUIL validation, and national public holidays for Brazil, Mexico, Chile and Argentina."
   });
 
   // ── FERRAMENTA 1: Validar CPF Brasileiro ──
@@ -84,30 +84,23 @@ const createServer = () => {
     },
     async ({ key }) => {
       const clean = key.trim();
-
-      // EVP (UUID)
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "EVP", key: clean }) }] };
       }
-      // Email
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "email", key: clean }) }] };
       }
-      // Phone (+55XXXXXXXXXXX)
       if (/^\+55\d{10,11}$/.test(clean)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "phone", key: clean }) }] };
       }
-      // CPF (11 digits)
       const digits = clean.replace(/[\s.\-]/g, "");
       if (/^\d{11}$/.test(digits)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "CPF", key: digits }) }] };
       }
-      // CNPJ (14 digits)
       const cnpjDigits = clean.replace(/[\s.\-\/]/g, "");
       if (/^\d{14}$/.test(cnpjDigits)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "CNPJ", key: cnpjDigits }) }] };
       }
-
       return { content: [{ type: "text", text: JSON.stringify({ valid: false, reason: "Key format not recognized. Expected CPF, CNPJ, email, phone (+55...) or EVP UUID" }) }] };
     }
   );
@@ -146,11 +139,9 @@ const createServer = () => {
     },
     async ({ rfc }) => {
       const clean = rfc.replace(/\s/g, "").toUpperCase();
-      // Individual: 4 letters + 6 digits (YYMMDD) + 3 alphanumeric
       if (/^[A-Z&Ñ]{4}\d{6}[A-Z0-9]{3}$/.test(clean)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "individual", rfc: clean }) }] };
       }
-      // Company: 3 letters + 6 digits (YYMMDD) + 3 alphanumeric
       if (/^[A-Z&Ñ]{3}\d{6}[A-Z0-9]{3}$/.test(clean)) {
         return { content: [{ type: "text", text: JSON.stringify({ valid: true, type: "company", rfc: clean }) }] };
       }
@@ -172,10 +163,8 @@ const createServer = () => {
         return { content: [{ type: "text", text: JSON.stringify({ valid: false, reason: "RUT format not recognized. Expected 7-8 digits followed by a dash and a digit or K" }) }] };
       }
       const parts = clean.split("-");
-      const body = parts[0];
       const dv = parts[1] || clean.slice(-1);
-      const number = parts.length > 1 ? body : clean.slice(0, -1);
-
+      const number = parts.length > 1 ? parts[0] : clean.slice(0, -1);
       let sum = 0;
       let multiplier = 2;
       for (let i = number.length - 1; i >= 0; i--) {
@@ -187,7 +176,6 @@ const createServer = () => {
       if (remainder === 11) expected = "0";
       else if (remainder === 10) expected = "K";
       else expected = remainder.toString();
-
       const valid = dv === expected;
       return { content: [{ type: "text", text: JSON.stringify({ valid, rut: number + "-" + dv }) }] };
     }
@@ -244,6 +232,109 @@ const createServer = () => {
     }
   );
 
+  // ── FERRAMENTA 9: Validar CUIT Argentino ──
+  server.registerTool(
+    "validate_cuit",
+    {
+      description: "Validates an Argentine CUIT (Código Único de Identificación Tributaria) using the official AFIP checksum algorithm. CUIT is used by companies, self-employed workers, and other entities for tax purposes. Use this tool when processing Argentine invoices, supplier registrations, B2B transactions, or any document requiring a valid Argentine tax identifier. Accepts CUIT with or without formatting (dashes). Returns whether the CUIT is valid, the entity type detected, and the cleaned CUIT.",
+      inputSchema: { cuit: z.string().describe("The Argentine CUIT to validate. Formatting (dashes) is automatically removed. Example: '30-12345678-9' or '30123456789'") },
+      annotations: { title: "Validate Argentine CUIT", readOnlyHint: true, idempotentHint: true, openWorldHint: false }
+    },
+    async ({ cuit }) => {
+      const clean = cuit.replace(/[\s\-]/g, "");
+      if (!/^\d{11}$/.test(clean)) {
+        return { content: [{ type: "text", text: JSON.stringify({ valid: false, reason: "CUIT must have exactly 11 digits" }) }] };
+      }
+
+      // Detect type from prefix
+      const prefix = parseInt(clean.substring(0, 2));
+      const typeMap = {
+        20: "individual_male",
+        23: "individual_male",
+        24: "individual_male",
+        27: "individual_female",
+        30: "company",
+        33: "company",
+        34: "company"
+      };
+      const entityType = typeMap[prefix] || "other";
+
+      // Official AFIP checksum algorithm
+      const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+      let sum = 0;
+      for (let i = 0; i < 10; i++) {
+        sum += parseInt(clean[i]) * weights[i];
+      }
+      const remainder = sum % 11;
+      let checkDigit;
+      if (remainder === 0) checkDigit = 0;
+      else if (remainder === 1) checkDigit = 9;
+      else checkDigit = 11 - remainder;
+
+      const valid = checkDigit === parseInt(clean[10]);
+      const formatted = `${clean.substring(0, 2)}-${clean.substring(2, 10)}-${clean[10]}`;
+      return { content: [{ type: "text", text: JSON.stringify({ valid, type: entityType, cuit: clean, formatted }) }] };
+    }
+  );
+
+  // ── FERRAMENTA 10: Validar CUIL Argentino ──
+  server.registerTool(
+    "validate_cuil",
+    {
+      description: "Validates an Argentine CUIL (Código Único de Identificación Laboral) using the official ANSES checksum algorithm. CUIL is the labor identification number assigned to all workers and employees in Argentina. Use this tool when processing Argentine payroll, employment contracts, social security forms, HR onboarding, or any document requiring a valid Argentine labor identifier. The validation algorithm is identical to CUIT. Returns whether the CUIL is valid and the cleaned CUIL.",
+      inputSchema: { cuil: z.string().describe("The Argentine CUIL to validate. Formatting (dashes) is automatically removed. Example: '20-12345678-9' or '20123456789'") },
+      annotations: { title: "Validate Argentine CUIL", readOnlyHint: true, idempotentHint: true, openWorldHint: false }
+    },
+    async ({ cuil }) => {
+      const clean = cuil.replace(/[\s\-]/g, "");
+      if (!/^\d{11}$/.test(clean)) {
+        return { content: [{ type: "text", text: JSON.stringify({ valid: false, reason: "CUIL must have exactly 11 digits" }) }] };
+      }
+
+      const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+      let sum = 0;
+      for (let i = 0; i < 10; i++) {
+        sum += parseInt(clean[i]) * weights[i];
+      }
+      const remainder = sum % 11;
+      let checkDigit;
+      if (remainder === 0) checkDigit = 0;
+      else if (remainder === 1) checkDigit = 9;
+      else checkDigit = 11 - remainder;
+
+      const valid = checkDigit === parseInt(clean[10]);
+      const formatted = `${clean.substring(0, 2)}-${clean.substring(2, 10)}-${clean[10]}`;
+      return { content: [{ type: "text", text: JSON.stringify({ valid, cuil: clean, formatted }) }] };
+    }
+  );
+
+  // ── FERRAMENTA 11: Feriados Argentinos ──
+  server.registerTool(
+    "get_argentina_holidays",
+    {
+      description: "Returns Argentine national public holidays for any given year. Use this tool when calculating delivery dates, scheduling appointments, computing working days, or any task requiring knowledge of non-working days in Argentina. Returns all national holidays with dates in YYYY-MM-DD format and names in both Spanish and English. Note: Argentina also has bridge holidays (feriados puente) declared annually by the government which are not included here.",
+      inputSchema: { year: z.number().describe("The year to get holidays for. Example: 2026") },
+      annotations: { title: "Get Argentina Holidays", readOnlyHint: true, idempotentHint: true, openWorldHint: false }
+    },
+    async ({ year }) => {
+      const holidays = [
+        { date: `${year}-01-01`, name: "Año Nuevo", name_en: "New Year's Day" },
+        { date: `${year}-03-24`, name: "Día Nacional de la Memoria por la Verdad y la Justicia", name_en: "National Day of Remembrance for Truth and Justice" },
+        { date: `${year}-04-02`, name: "Día del Veterano y de los Caídos en la Guerra de Malvinas", name_en: "Malvinas War Veterans Day" },
+        { date: `${year}-05-01`, name: "Día del Trabajador", name_en: "Labour Day" },
+        { date: `${year}-05-25`, name: "Día de la Revolución de Mayo", name_en: "May Revolution Day" },
+        { date: `${year}-06-20`, name: "Paso a la Inmortalidad del General Manuel Belgrano", name_en: "General Belgrano Memorial Day" },
+        { date: `${year}-07-09`, name: "Día de la Independencia", name_en: "Independence Day" },
+        { date: `${year}-08-17`, name: "Paso a la Inmortalidad del General José de San Martín", name_en: "General San Martín Memorial Day" },
+        { date: `${year}-10-12`, name: "Día del Respeto a la Diversidad Cultural", name_en: "Cultural Diversity Day" },
+        { date: `${year}-11-20`, name: "Día de la Soberanía Nacional", name_en: "National Sovereignty Day" },
+        { date: `${year}-12-08`, name: "Inmaculada Concepción de María", name_en: "Immaculate Conception" },
+        { date: `${year}-12-25`, name: "Navidad", name_en: "Christmas Day" },
+      ];
+      return { content: [{ type: "text", text: JSON.stringify({ year, country: "Argentina", total_holidays: holidays.length, holidays }) }] };
+    }
+  );
+
   return server;
 };
 
@@ -253,9 +344,9 @@ const httpServer = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       name: "mcp-latam-tools",
-      version: "1.1.0",
+      version: "1.2.0",
       description: "Latin American data validation and utility tools for AI agents",
-      tools: ["validate_cpf", "validate_cnpj", "validate_pix_key", "get_brazil_holidays", "validate_rfc_mx", "validate_rut_cl", "get_mexico_holidays", "get_chile_holidays"],
+      tools: ["validate_cpf", "validate_cnpj", "validate_pix_key", "get_brazil_holidays", "validate_rfc_mx", "validate_rut_cl", "get_mexico_holidays", "get_chile_holidays", "validate_cuit", "validate_cuil", "get_argentina_holidays"],
       mcp_endpoint: "/mcp"
     }));
     return;
