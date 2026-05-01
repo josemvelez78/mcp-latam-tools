@@ -8,18 +8,17 @@ Essential Latin American data validation tools for AI agents working with Brazil
 ## Quickstart
 
 **Option 1 — MCPize (hosted, no setup):**
-```
-https://latam-tools.mcpize.run
-```
+
+https://mcpize.com/mcp/latam-tools
+
 Free tier: 500 requests/month, no credit card required. [Get your API key →](https://mcpize.com)
 
 **Option 2 — Smithery:**
-```bash
+
 smithery mcp add josemvelez/mcp-latam-tools
-```
 
 **Option 3 — Claude Desktop (direct endpoint):**
-```json
+
 {
   "mcpServers": {
     "mcp-latam-tools": {
@@ -27,7 +26,6 @@ smithery mcp add josemvelez/mcp-latam-tools
     }
   }
 }
-```
 
 ## What it does
 
